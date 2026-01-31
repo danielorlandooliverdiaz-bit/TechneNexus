@@ -5,22 +5,26 @@ on:
     branches: [ "main" ]
 
 env:
-  REGISTRY: "10.2.84.38:5000"     # IP de Forge
+  # 👇 IP DE FORGE-VM (Donde está el Registry)
+  REGISTRY: "10.2.84.60:5000"
+  
+  # Nombre de la imagen
   IMAGE_NAME: "technenexus-web"
-  PROD_IP: "10.2.84.95"           # IP de Phoenix
+  
+  # 👇 IP DE PHOENIX-VM (Donde se despliega)
+  PROD_IP: "10.2.84.30"
 
 jobs:
   deploy:
-    runs-on: self-hosted          # Usará tu nuevo runner forge-apps
+    runs-on: self-hosted
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
       - name: 🏗️ Build & Push
         run: |
-          # Construir usando el Registry Local
+          echo "🏗️ Construyendo imagen para $REGISTRY..."
           docker build -t $REGISTRY/$IMAGE_NAME:latest .
-          # Subir al Registry Local (Velocidad luz ⚡)
           docker push $REGISTRY/$IMAGE_NAME:latest
 
       - name: 🚀 Deploy to Phoenix
@@ -29,16 +33,18 @@ jobs:
           host: ${{ env.PROD_IP }}
           username: sysadmin
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # port: 22
           script: |
-            # Esto se ejecuta DENTRO de Phoenix
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            echo "🔥 Conectado a Phoenix (${{ env.PROD_IP }})..."
             
-            # Parar versión vieja
+            # 1. Parar contenedor anterior
             docker stop web-app || true
             docker rm web-app || true
             
-            # Arrancar versión nueva
+            # 2. Descargar nueva versión
+            # NOTA: Si esto falla, es porque Phoenix aún busca el registry en la IP antigua.
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            
+            # 3. Arrancar
             docker run -d \
               --name web-app \
               --restart always \
