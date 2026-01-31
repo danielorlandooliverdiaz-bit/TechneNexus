@@ -1,0 +1,46 @@
+name: 🚀 Deploy Production
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: "10.2.84.38:5000"     # IP de Forge
+  IMAGE_NAME: "technenexus-web"
+  PROD_IP: "10.2.84.95"           # IP de Phoenix
+
+jobs:
+  deploy:
+    runs-on: self-hosted          # Usará tu nuevo runner forge-apps
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Build & Push
+        run: |
+          # Construir usando el Registry Local
+          docker build -t $REGISTRY/$IMAGE_NAME:latest .
+          # Subir al Registry Local (Velocidad luz ⚡)
+          docker push $REGISTRY/$IMAGE_NAME:latest
+
+      - name: 🚀 Deploy to Phoenix
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.PROD_IP }}
+          username: sysadmin
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # port: 22
+          script: |
+            # Esto se ejecuta DENTRO de Phoenix
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            
+            # Parar versión vieja
+            docker stop web-app || true
+            docker rm web-app || true
+            
+            # Arrancar versión nueva
+            docker run -d \
+              --name web-app \
+              --restart always \
+              -p 80:80 \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
