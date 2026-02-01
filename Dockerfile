@@ -1,16 +1,16 @@
-# Usamos una imagen ligera de Python
+# Etapa 1: Constructor
+FROM python:3.11-slim as builder
+RUN apt-get update && apt-get install -y gcc python3-dev
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Etapa 2: Ejecución (Imagen final ligera)
 FROM python:3.11-slim
-
 WORKDIR /app
-
-# Instalamos las dependencias necesarias
-RUN pip install --no-cache-dir fastapi uvicorn
-
-# Copiamos el código
+COPY --from=builder /root/.local /root/.local
 COPY main.py .
 
-# Exponemos el puerto 80
+ENV PATH=/root/.local/bin:$PATH
 EXPOSE 80
 
-# Comando para arrancar la app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
