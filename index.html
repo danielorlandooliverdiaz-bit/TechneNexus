@@ -1,16 +1,125 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-<meta charset="UTF-8">  <title>TechneNexus V1</title>
-    
+    <meta charset="UTF-8">
+    <title>TechneNexus Live Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/gh/alpinejs/alpine@v3.x.x/dist/cdn.min.js" defer></script>
     <style>
-        body { font-family: sans-serif; text-align: center; padding-top: 50px; background-color: #1a1a1a; color: white; }
-        h1 { color: #00ff00; }
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow-x: hidden; }
+        .container { background: #1e293b; padding: 2.5rem; border-radius: 1.5rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); width: 95%; max-width: 1000px; text-align: center; border: 1px solid #334155; }
+        h1 { color: #4ade80; margin-bottom: 0.5rem; font-size: 2.5rem; }
+        p { color: #94a3b8; font-size: 1.1rem; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-top: 2.5rem; }
+        .metric-card { background: #0f172a; padding: 2rem; border-radius: 1rem; border: 1px solid #1e293b; transition: transform 0.2s, border-color 0.2s; cursor: default; }
+        .metric-card:hover { transform: translateY(-5px); border-color: #4ade80; }
+        .value { font-size: 2rem; font-weight: bold; color: #4ade80; }
+        .label { color: #94a3b8; font-size: 0.95rem; text-transform: uppercase; margin-top: 0.75rem; }
+        .controls { margin-top: 3rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+        .btn { background-color: #4ade80; color: #0f172a; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: bold; cursor: pointer; border: none; transition: background-color 0.2s, transform 0.2s; }
+        .btn:hover { background-color: #22c55e; transform: translateY(-2px); }
+        .btn-red { background-color: #ef4444; color: #fff; }
+        .btn-red:hover { background-color: #dc2626; }
+        .footer { margin-top: 3rem; color: #64748b; font-size: 0.8rem; border-top: 1px solid #334155; padding-top: 1.5rem; }
     </style>
 </head>
-<body>
-    <h1>🚀 TechneNexus Operativo</h1>
-    <p>Desplegado automáticamente desde GitHub a Phoenix-VM.</p>
-    <p>Docker Registry Local: <b>Funcionando</b></p>
+<body x-data="dashboard()">
+    <div class="container">
+        <h1>🚀 TechneNexus Control Center</h1>
+        <p>Nodo: <span x-text="info.hostname"></span> (<span x-text="info.ip"></span>) | <span x-text="info.current_time"></span></p>
+        
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="value" x-text="metrics.cpu_usage.toFixed(1) + '%'"></div>
+                <div class="label">Uso de CPU</div>
+            </div>
+            <div class="metric-card">
+                <div class="value" x-text="metrics.ram_usage.toFixed(1) + '%'"></div>
+                <div class="label">Memoria RAM</div>
+            </div>
+            <div class="metric-card">
+                <div class="value" x-text="metrics.disk_usage.toFixed(1) + '%'"></div>
+                <div class="label">Espacio en Disco</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn" @click="startStress(10)">Estresar CPU (10s)</button>
+            <button class="btn" @click="startStress(30)">Estresar CPU (30s)</button>
+            <button class="btn btn-red" @click="triggerError()">Generar Error 500</button>
+        </div>
+
+        <p class="footer">
+            Última actualización: <span x-text="metrics.timestamp ? new Date(metrics.timestamp).toLocaleTimeString() : 'N/A'"></span>
+            | Pipeline CD Activo | Infraestructura como Código (Ansible/Incus)
+        </p>
+    </div>
+
+    <script>
+        function dashboard() {
+            return {
+                metrics: { cpu_usage: 0, ram_usage: 0, disk_usage: 0, timestamp: null },
+                info: { hostname: 'Cargando...', ip: 'Cargando...', current_time: 'Cargando...' },
+                loading: false,
+
+                init() {
+                    this.fetchInfo();
+                    this.fetchMetrics();
+                    setInterval(() => this.fetchMetrics(), 3000); // Actualiza cada 3 segundos
+                    setInterval(() => this.fetchInfo(), 10000); // Actualiza la info del nodo cada 10 segundos
+                },
+
+                async fetchMetrics() {
+                    try {
+                        const response = await fetch('/api/metrics');
+                        this.metrics = await response.json();
+                    } catch (error) {
+                        console.error('Error al obtener métricas:', error);
+                    }
+                },
+
+                async fetchInfo() {
+                    try {
+                        const response = await fetch('/api/info');
+                        this.info = await response.json();
+                    } catch (error) {
+                        console.error('Error al obtener info del nodo:', error);
+                    }
+                },
+
+                async startStress(seconds) {
+                    if (this.loading) return;
+                    this.loading = true;
+                    try {
+                        await fetch(`/api/stress/${seconds}`, { method: 'POST' });
+                        alert(`Test de estrés de ${seconds}s finalizado.`);
+                    } catch (error) {
+                        alert('Error al iniciar test de estrés.');
+                        console.error('Error de estrés:', error);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async triggerError() {
+                    if (this.loading) return;
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/error', { method: 'POST' });
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            alert(`Error generado: ${errorData.detail}`);
+                        } else {
+                            alert('Error generado (inesperado, revisa logs).');
+                        }
+                    } catch (error) {
+                        alert('Error al generar error.');
+                        console.error('Error:', error);
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            }
+        }
+    </script>
 </body>
 </html>
